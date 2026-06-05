@@ -32,7 +32,7 @@ if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
 if st.session_state.auth_user is None:
-    st.title("🔒 Professional CA Firm Management Portal")
+    st.title("🔒 Professional")
     st.subheader("Secure Firm Authentication Gateway")
     
     username = st.text_input("User ID Key", placeholder="Enter assigned user id...")
