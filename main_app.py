@@ -80,10 +80,14 @@ def get_tasks_list():
     tasks = []
     for row in rows:
         tasks.append({
-            "id": row[0], "task_name": row[1], "local_head_assigned": row[2], "allocated_to": row[3],
+            "id": row[0], 
+            "task_name": row[1], 
+            "local_head_assigned": row[2], 
+            "allocated_to": row[3],
             "allocation_date": datetime.datetime.strptime(row[4], "%Y-%m-%d").date(),
             "due_date": datetime.datetime.strptime(row[5], "%Y-%m-%d").date(),
-            "status": row[6], "description": row[7]
+            "status": row[6], 
+            "description": row[7]
         })
     return tasks
 
@@ -185,7 +189,6 @@ if user_role in ["Master User", "Local Head"]:
     if user_role == "Master User":
         base_df = df_tasks
     else:
-        # Local Head defaults to seeing rows where they are marked as the overseer
         base_df = df_tasks[df_tasks["local_head_assigned"] == current_user] if not df_tasks.empty else df_tasks
 
     # --- ADVANCED VIEW FILTERS CORE ---
@@ -193,7 +196,6 @@ if user_role in ["Master User", "Local Head"]:
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        # Show all choices for Master; Keep fixed to self for Local Head
         if user_role == "Master User":
             filter_head = st.selectbox("Filter by Local Head Overseer", ["All Personnel"] + all_registered_identities)
         else:
@@ -222,20 +224,7 @@ if user_role in ["Master User", "Local Head"]:
         st.dataframe(visible_df[["id", "task_name", "local_head_assigned", "allocated_to", "allocation_date", "due_date", "Deadline Status Tracker", "status", "description"]], use_container_width=True)
     else:
         st.info("No matching task assignments recorded within this filter query.")
-        # --- SECURE CREDENTIALS AUDIT CORE PANEL (PASTE ANYWHERE) ---
-if user_role == "Master User":
-    st.markdown("---")
-    st.subheader("👥 Active Database User Credentials Registry")
     
-    # Query all users, passwords, and roles directly from the persistent SQLite database
-    user_rows = run_query("SELECT username AS 'User ID Key', password AS 'Password Security Key', role AS 'System Access Level' FROM users")
-    
-    if user_rows:
-        # Convert raw database rows into a clear, viewable screen table
-        df_db_users = pd.DataFrame(user_rows, columns=["User ID Key", "Password Security Key", "System Access Level"])
-        st.dataframe(df_db_users, use_container_width=True)
-    else:
-        st.info("No active users found in the system registry.")
-        
-
-    
+    if user_role == "Master User":
+        st.markdown("---")
+        st.subheader("👥 Active Database User Credentials Registry")
