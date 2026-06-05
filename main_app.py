@@ -222,5 +222,20 @@ if user_role in ["Master User", "Local Head"]:
         st.dataframe(visible_df[["id", "task_name", "local_head_assigned", "allocated_to", "allocation_date", "due_date", "Deadline Status Tracker", "status", "description"]], use_container_width=True)
     else:
         st.info("No matching task assignments recorded within this filter query.")
+        # --- SECURE CREDENTIALS AUDIT CORE PANEL (PASTE ANYWHERE) ---
+if user_role == "Master User":
+    st.markdown("---")
+    st.subheader("👥 Active Database User Credentials Registry")
+    
+    # Query all users, passwords, and roles directly from the persistent SQLite database
+    user_rows = run_query("SELECT username AS 'User ID Key', password AS 'Password Security Key', role AS 'System Access Level' FROM users")
+    
+    if user_rows:
+        # Convert raw database rows into a clear, viewable screen table
+        df_db_users = pd.DataFrame(user_rows, columns=["User ID Key", "Password Security Key", "System Access Level"])
+        st.dataframe(df_db_users, use_container_width=True)
+    else:
+        st.info("No active users found in the system registry.")
+        
 
     
