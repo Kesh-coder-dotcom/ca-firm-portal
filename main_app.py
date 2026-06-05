@@ -205,3 +205,12 @@ if user_role in ["Master User", "Local Head"]:
                 st.session_state.cloud_tasks.append({
                     "id": new_id, 
                     "task_name": t_name, 
+                    # Remove all files in the current directory locally
+git rm -rf .
+
+# Commit the deletion pass
+git commit -m "Wipe out all code files"
+
+# Push the blank slate up to GitHub
+git push origin main
+                    
