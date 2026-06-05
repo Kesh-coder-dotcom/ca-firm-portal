@@ -3,7 +3,7 @@ import pandas as pd
 import datetime
 
 # --- PRODUCTION CONFIGURATION ---
-st.set_page_config(page_title="CA Firm Task Portal", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="TASK ASSIGNER", layout="wide", initial_sidebar_state="expanded")
 
 # --- REVOLVING STATE ENGINE ---
 # Preserves data dynamically for active users across mobile devices
