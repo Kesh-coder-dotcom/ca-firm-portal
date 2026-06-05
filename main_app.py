@@ -1,47 +1,98 @@
-import streamlit as st
+    import streamlit as st
 import pandas as pd
 import datetime
+import sqlite3
 
 # --- PRODUCTION CONFIGURATION ---
 st.set_page_config(page_title="TASK ASSIGNER", layout="wide", initial_sidebar_state="expanded")
 
-# --- REVOLVING STATE ENGINE ---
-# Preserves data dynamically for active users across mobile devices
-if "cloud_users" not in st.session_state:
-    st.session_state.cloud_users = {
-        "master_admin": {"password": "admin123", "role": "Master User"},
-        "local_head1": {"password": "head123", "role": "Local Head"},
-        "junior_staff1": {"password": "staff123", "role": "Junior Staff"},
-    }
+# --- PERSISTENT SQLITE DATABASE ENGINE ---
+DB_FILE = "database.db"
 
-if "cloud_tasks" not in st.session_state:
-    st.session_state.cloud_tasks = [
-        {
-            "id": 1, 
-            "task_name": "Income Tax Audit - Client X", 
-            "allocated_to": "junior_staff1", 
-            "allocation_date": datetime.date.today(),
-            "due_date": datetime.date.today() + datetime.timedelta(days=4),
-            "status": "In Progress",
-            "description": "Initial data compilation started by Junior." 
-        }
-    ]
+def init_db():
+    """Initializes the database tables and inserts default system users if empty."""
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        # Create Users table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY,
+                password TEXT NOT NULL,
+                role TEXT NOT NULL
+            )
+        ''')
+        # Create Tasks table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT NOT NULL,
+                allocated_to TEXT NOT NULL,
+                allocation_date TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                status TEXT NOT NULL,
+                description TEXT
+            )
+        ''')
+        
+        # Seed initial default users if table is blank
+        cursor.execute("SELECT COUNT(*) FROM users")
+        if cursor.fetchone()[0] == 0:
+            cursor.executemany("INSERT INTO users VALUES (?, ?, ?)", [
+                ("master_admin", "admin123", "Master User"),
+                ("local_head1", "head123", "Local Head"),
+                ("junior_staff1", "staff123", "Junior Staff")
+            ])
+            # Seed initial task
+            cursor.execute(
+                "INSERT INTO tasks (task_name, allocated_to, allocation_date, due_date, status, description) VALUES (?, ?, ?, ?, ?, ?)",
+                ("Income Tax Audit - Client X", "junior_staff1", str(datetime.date.today()), str(datetime.date.today() + datetime.timedelta(days=4)), "In Progress", "Initial data compilation started by Junior.")
+            )
+        conn.commit()
+
+# Trigger database build
+init_db()
+
+# Helper database utility functions
+def run_query(query, params=(), is_select=True):
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        if is_select:
+            return cursor.fetchall()
+        conn.commit()
+
+def get_users_dict():
+    rows = run_query("SELECT username, password, role FROM users")
+    return {row[0]: {"password": row[1], "role": row[2]} for row in rows}
+
+def get_tasks_list():
+    rows = run_query("SELECT id, task_name, allocated_to, allocation_date, due_date, status, description FROM tasks")
+    tasks = []
+    for row in rows:
+        tasks.append({
+            "id": row[0], "task_name": row[1], "allocated_to": row[2],
+            "allocation_date": datetime.datetime.strptime(row[3], "%Y-%m-%d").date(),
+            "due_date": datetime.datetime.strptime(row[4], "%Y-%m-%d").date(),
+            "status": row[5], "description": row[6]
+        })
+    return tasks
 
 # --- LOGIN GATEWAY ---
 if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
 if st.session_state.auth_user is None:
-    st.title("🔒 Professional")
+    st.title("🔒 Professional CA Firm Management Portal")
     st.subheader("Secure Firm Authentication Gateway")
     
     username = st.text_input("User ID Key", placeholder="Enter assigned user id...")
     password = st.text_input("Password Security Key", type="password", placeholder="Enter password...")
     
     if st.button("Authenticate Connection", use_container_width=True):
-        if username in st.session_state.cloud_users and st.session_state.cloud_users[username]["password"] == password:
+        cloud_users = get_users_dict()
+        if username in cloud_users and cloud_users[username]["password"] == password:
             st.session_state.auth_user = username
-            st.session_state.auth_role = st.session_state.cloud_users[username]["role"]
+            st.session_state.auth_role = cloud_users[username]["role"]
             st.rerun()
         else: 
             st.error("🔒 Security Exception: Access Denied. Invalid User ID or Password.")
@@ -59,10 +110,11 @@ if st.sidebar.button("Secure Terminate (Logout)", use_container_width=True):
     st.session_state.auth_role = None
     st.rerun()
 
-# --- INTERNAL CONTROL 1: ROLE CREATION ENGINE (MASTER ONLY) ---
+# --- INTERNAL CONTROL 1: ROLE PROVISIONING & DELETION ENGINE (MASTER ONLY) ---
 if user_role == "Master User":
     st.sidebar.markdown("---")
     st.sidebar.subheader("🛠️ Master Provisioning Engine")
+    
     with st.sidebar.expander("Generate New System Credentials"):
         new_uid = st.text_input("Target User ID")
         new_pwd = st.text_input("Security Access Password", type="password")
@@ -70,17 +122,37 @@ if user_role == "Master User":
         
         if st.button("Deploy User Credentials"):
             if new_uid and new_pwd:
-                if new_uid not in st.session_state.cloud_users:
-                    st.session_state.cloud_users[new_uid] = {"password": new_pwd, "role": role_selection}
+                cloud_users = get_users_dict()
+                if new_uid not in cloud_users:
+                    run_query("INSERT INTO users VALUES (?, ?, ?)", (new_uid, new_pwd, role_selection), is_select=False)
                     st.sidebar.success(f"System clearance issued to '{new_uid}'!")
+                    st.rerun()
                 else:
                     st.sidebar.error("System Error: ID exists.")
             else:
                 st.sidebar.error("Input missing metrics.")
 
+    with st.sidebar.expander("❌ De-provision System Users"):
+        cloud_users = get_users_dict()
+        # Prevent master admin from deleting themselves accidentally
+        removable_users = [u for u in cloud_users.keys() if u != "master_admin"]
+        
+        if removable_users:
+            user_to_delete = st.selectbox("Select Profile to Remove", removable_users)
+            if st.button("Revoke Account Access", type="primary"):
+                run_query("DELETE FROM users WHERE username = ?", (user_to_delete,), is_select=False)
+                st.sidebar.warning(f"User account '{user_to_delete}' has been purged.")
+                st.rerun()
+        else:
+            st.sidebar.text("No external accounts available.")
+
+# --- DATA RETRIEVAL FOR VIEWS ---
+current_tasks = get_tasks_list()
+current_users_dict = get_users_dict()
+
 # --- INTERNAL CONTROL 2: VISIBILITY & DATA ISOLATION ENGINE ---
 st.title("📊 Chartered Accountant Operational Oversight Panel")
-df_tasks = pd.DataFrame(st.session_state.cloud_tasks)
+df_tasks = pd.DataFrame(current_tasks)
 today = datetime.date.today()
 
 def compute_deadline_metrics(due_date):
@@ -97,7 +169,7 @@ if not df_tasks.empty:
 if user_role in ["Master User", "Local Head"]:
     c1, c2 = st.columns(2)
     c1.metric("Gross Active Deployments", len(df_tasks))
-    c2.metric("System Managed Operational Identities", len(st.session_state.cloud_users))
+    c2.metric("System Managed Operational Identities", len(current_users_dict))
     
     st.subheader("📋 Comprehensive Assignment Log Matrix")
     if not df_tasks.empty:
@@ -115,11 +187,10 @@ else:
 st.markdown("---")
 st.subheader("⚙️ Authorized Processing Action Panel")
 
-# Deployment Logic Framework (Master and Local Head Only)
 if user_role in ["Master User", "Local Head"]:
     with st.expander("➕ Authorize & Deploy a New Allocation Assignment"):
         t_name = st.text_input("Assignment Title / Client Name")
-        all_juniors = [u for u, data in st.session_state.cloud_users.items() if data["role"] == "Junior Staff"]
+        all_juniors = [u for u, data in current_users_dict.items() if data["role"] == "Junior Staff"]
         t_alloc = st.selectbox("Assign Primary Accountability To", all_juniors if all_juniors else ["No Resources Registered"])
         t_due = st.date_input("Target Legal/Statutory Maturity Due Date", min_value=today)
         t_status = st.selectbox("System Prioritization Level Status", ["In Progress", "Urgent"])
@@ -127,51 +198,25 @@ if user_role in ["Master User", "Local Head"]:
         
         if st.button("Commit Allocation to Log"):
             if t_name and t_alloc != "No Resources Registered":
-                new_id = max([t["id"] for t in st.session_state.cloud_tasks]) + 1 if st.session_state.cloud_tasks else 1
-                st.session_state.cloud_tasks.append({
-                    "id": new_id, "task_name": t_name, "allocated_to": t_alloc,
-                    "allocation_date": today, "due_date": t_due, "status": t_status, "description": t_desc
-                })
+                run_query(
+                    "INSERT INTO tasks (task_name, allocated_to, allocation_date, due_date, status, description) VALUES (?, ?, ?, ?, ?, ?)",
+                    (t_name, t_alloc, str(today), str(t_due), t_status, t_desc),
+                    is_select=False
+                )
                 st.success("Allocation updated!")
                 st.rerun()
 
-# Processing Log Updates Matrix
-if st.session_state.cloud_tasks:
-    with st.expander("📝 Process Modification Audits & Track Updates"):
+# Processing Log Updates & Task Deletion Matrix
+if current_tasks:
+    with st.expander("📝 Process Modification Audits & Task Actions"):
         if user_role in ["Master User", "Local Head"]:
-            eligible_options = {f"ID {t['id']}: {t['task_name']} (Responsible: {t['allocated_to']})": t for t in st.session_state.cloud_tasks}
+            eligible_options = {f"ID {t['id']}: {t['task_name']} (Responsible: {t['allocated_to']})": t for t in current_tasks}
         else:
-            eligible_options = {f"ID {t['id']}: {t['task_name']}": t for t in st.session_state.cloud_tasks if t['allocated_to'] == current_user}
+            eligible_options = {f"ID {t['id']}: {t['task_name']}": t for t in current_tasks if t['allocated_to'] == current_user}
             
         if eligible_options:
-            selected_node = st.selectbox("Select Target Registry Object to Modify", list(eligible_options.keys()))
+            selected_node = st.selectbox("Select Target Registry Object to Modify/Delete", list(eligible_options.keys()))
             target_object = eligible_options[selected_node]
-            idx_map = next(i for i, t in enumerate(st.session_state.cloud_tasks) if t["id"] == target_object["id"])
             
-            # Master User & Local Head configuration changes
-            if user_role in ["Master User", "Local Head"]:
-                m_name = st.text_input("Modify Operational Title Description", value=target_object["task_name"])
-                all_juniors = [u for u, data in st.session_state.cloud_users.items() if data["role"] == "Junior Staff"]
-                m_alloc = st.selectbox("Re-allocate Core Responsibility Node", all_juniors, index=all_juniors.index(target_object["allocated_to"]) if target_object["allocated_to"] in all_juniors else 0)
-                m_due = st.date_input("Alter Allocation Target Timeline Due Date", value=target_object["due_date"])
-                m_status = st.selectbox("Update State Vector Flag", ["In Progress", "Urgent", "Completed"])
-                m_desc = st.text_area("Audit Log Tracking Block Description Area", value=target_object["description"])
-                
-                if st.button("Publish Modifications"):
-                    st.session_state.cloud_tasks[idx_map].update({
-                        "task_name": m_name, "allocated_to": m_alloc,
-                        "due_date": m_due, "status": m_status, "description": m_desc
-                    })
-                    st.success("Changes saved successfully.")
-                    st.rerun()
-
-            # Junior Staff: Description update access only
-            elif user_role == "Junior Staff":
-                st.markdown(f"**Task Classification:** {target_object['task_name']}")
-                m_desc = st.text_area("Update Stage Description (Description Progress Box Only)", value=target_object["description"])
-                
-                if st.button("Publish Log Progress Update"):
-                    st.session_state.cloud_tasks[idx_map]["description"] = m_desc
-                    st.success("Audit narrative progress updated.")
-                    st.rerun()
-      
+            # Form Layout split for Edit vs Delete Actions
+    
