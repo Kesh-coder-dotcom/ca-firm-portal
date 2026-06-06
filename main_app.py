@@ -97,6 +97,8 @@ if user_role == "Master User":
 
 # Dynamic identification lists that read directly from current memory logs
 all_registered_identities = sorted(list(st.session_state.cloud_users.keys()))
+all_local_heads = [u for u, d in st.session_state.cloud_users.items() if d["role"] == "Local Head"]
+all_junior_staff = [u for u, d in st.session_state.cloud_users.items() if d["role"] == "Junior Staff"]
 
 # --- INTERNAL CONTROL 2: VISIBILITY & DATA ISOLATION ENGINE ---
 st.title("📊 Chartered Accountant Operational Oversight Panel")
@@ -117,6 +119,51 @@ if not df_tasks.empty:
 # High-Tier Visibility & Interactive Multi-User Filters
 if user_role in ["Master User", "Local Head"]:
     
+    # --- TASK PROVISIONING ENGINE (CREATION FORM) ---
+    st.subheader("➕ Deploy New Task Assignment")
+    with st.expander("Configure New Task Deployment Parameters", expanded=False):
+        t_col1, t_col2 = st.columns(2)
+        
+        with t_col1:
+            new_task_name = st.text_input("Task Assignment Name", placeholder="e.g., Statutory Audit - Client ABC")
+            
+            if user_role == "Master User":
+                assigned_head = st.selectbox("Assign Supervising Local Head", all_local_heads if all_local_heads else ["No Local Heads Available"])
+            else:
+                assigned_head = current_user
+                st.text_input("Supervising Local Head (Locked)", value=current_user, disabled=True)
+                
+        with t_col2:
+            assigned_worker = st.selectbox("Allocate to Worker (Junior Staff)", all_junior_staff if all_junior_staff else ["No Junior Staff Available"])
+            new_due_date = st.date_input("Target Completion Date (Due Date)", today + datetime.timedelta(days=7))
+            
+        new_task_desc = st.text_area("Initial Directives & Operational Scope")
+        
+        if st.button("Initialize & Deploy Task", type="primary", use_container_width=True):
+            if not new_task_name:
+                st.error("Deployment Refused: Task Assignment Name cannot be blank.")
+            elif assigned_head == "No Local Heads Available" or assigned_worker == "No Junior Staff Available":
+                st.error("Deployment Refused: Valid firm operators must be selected.")
+            else:
+                # Calculate new serial ID safely
+                next_id = max([t["id"] for t in st.session_state.cloud_tasks]) + 1 if st.session_state.cloud_tasks else 1
+                
+                # Append to memory matrix
+                st.session_state.cloud_tasks.append({
+                    "id": next_id,
+                    "task_name": new_task_name,
+                    "local_head_assigned": assigned_head,
+                    "allocated_to": assigned_worker,
+                    "allocation_date": today,
+                    "due_date": new_due_date,
+                    "status": "In Progress",
+                    "description": new_task_desc if new_task_desc else "No custom guidelines attached."
+                })
+                st.success(f"Success! Task ID {next_id} successfully deployed into workflow chain.")
+                st.rerun()
+
+    st.markdown("---")
+
     # Base isolation filtering rules
     if user_role == "Master User":
         base_df = df_tasks
@@ -160,49 +207,3 @@ if user_role in ["Master User", "Local Head"]:
     # Master Audit Dashboard Credentials Viewer Panel
     if user_role == "Master User":
         st.markdown("---")
-        st.subheader("👥 Active Database User Credentials Registry")
-        df_db_users = pd.DataFrame([
-            {"User ID Key": u, "Password Security Key": d["password"], "System Access Level Rights": d["role"]}
-            for u, d in st.session_state.cloud_users.items()
-        ])
-        st.dataframe(df_db_users, use_container_width=True)
-else:
-    # Junior Staff Isolation Stream
-    st.subheader("📥 Personal Duty Isolation Stream")
-    if not df_tasks.empty:
-        my_isolated_tasks = df_tasks[df_tasks["allocated_to"] == current_user]
-        if not my_isolated_tasks.empty:
-            st.dataframe(my_isolated_tasks[["id", "task_name", "local_head_assigned", "allocation_date", "due_date", "Deadline Status Tracker", "status", "description"]], use_container_width=True)
-        else:
-            st.info("No tasks allocated to your profile.")
-
-# --- INTERNAL CONTROL 3: CONSTRAINED MODIFICATION CORE ---
-st.markdown("---")
-st.subheader("⚙️ Authorized Processing Action Panel")
-
-if user_role in ["Master User", "Local Head"]:
-    with st.expander("➕ Authorize & Deploy a New Allocation Assignment"):
-        t_name = st.text_input("Assignment Title / Client Name")
-        
-        # Operational flexibility dropdown configurations (Loads ALL users dynamically)
-        if user_role == "Master User":
-            t_head = st.selectbox("Designate Overseeing Local Head", all_registered_identities if all_registered_identities else ["No Resources"])
-            t_alloc = st.selectbox("Assign Primary Accountability To (Worker)", all_registered_identities if all_registered_identities else ["No Resources"])
-        else:
-            st.text(f"Designate Overseeing Local Head: {current_user} (Auto-Locked)")
-            t_head = current_user
-            t_alloc = st.selectbox("Assign Primary Accountability To (Worker)", all_registered_identities if all_registered_identities else ["No Resources"])
-            
-        t_due = st.date_input("Target Legal/Statutory Maturity Due Date", min_value=today)
-        t_status = st.selectbox("System Prioritization Level Status", ["In Progress", "Urgent"])
-        t_desc = st.text_area("Initial Operational Scope Description Data")
-        
-        if st.button("Commit Allocation to Log"):
-            if t_name and t_alloc != "No Resources" and t_head != "No Resources":
-                # Fixed ID safety fallback logic to prevent crash if log array is completely empty
-                new_id = max([t["id"] for t in st.session_state.cloud_tasks]) + 1 if st.session_state.cloud_tasks else 1
-                
-                st.session_state.cloud_tasks.append({
-                    "id": new_id, 
-                    "task_name": t_name, 
-        
