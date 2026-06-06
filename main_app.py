@@ -47,7 +47,7 @@ if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
 if st.session_state.auth_user is None:
-    st.title("🔒 Professional CA Firm Management Portal")
+    st.title("🔒 Professional  Portal")
     st.subheader("Secure Firm Authentication Gateway")
     
     username_input = st.text_input("User ID Key", placeholder="Enter assigned user id...").strip()
@@ -211,4 +211,4 @@ if user_role in ["Master User", "Local Head"]:
     
     st.subheader("📋 Comprehensive Assignment Log Matrix")
     if not visible_df.empty:
-        
+                                              
