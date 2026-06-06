@@ -9,10 +9,17 @@ st.set_page_config(page_title="TASK ASSIGNER", layout="wide", initial_sidebar_st
 # --- DATABASE CONNECTION ENGINE ---
 @st.cache_resource
 def init_supabase() -> Client:
-    """Establishes a single, cached network client to the cloud database."""
-    url = st.secrets["supabase"]["url"]
-    key = st.secrets["supabase"]["key"]
-    return create_client(url, key)
+    """Establishes a cached network client pointing directly to the database API gateway."""
+    base_url = st.secrets["supabase"]["url"].strip().rstrip("/")
+    
+    # Force the explicit REST directory sub-route to completely bypass 404 HTML landing pages
+    if not base_url.endswith("/rest/v1"):
+        api_url = f"{base_url}/rest/v1"
+    else:
+        api_url = base_url
+        
+    key = st.secrets["supabase"]["key"].strip()
+    return create_client(api_url, key)
 
 try:
     supabase = init_supabase()
@@ -39,7 +46,7 @@ try:
     current_db_users = fetch_all_users()
     current_db_tasks = fetch_all_tasks()
 except Exception as e:
-    st.error(f"⚠️ Query Failure: Failed to synchronize live logs. {e}")
+    st.error(f"⚠️ Query Failure: Failed to synchronize live logs. Ensure tables exist in Supabase and secrets match. Error: {e}")
     st.stop()
 
 # --- LOGIN GATEWAY ---
@@ -87,7 +94,6 @@ if user_role == "Master User":
         if st.button("Deploy User Credentials"):
             if new_uid and new_pwd:
                 if new_uid not in current_db_users:
-                    # Write user directly to remote Supabase server
                     supabase.table("cloud_users").insert({
                         "username": new_uid, 
                         "password": new_pwd, 
@@ -106,7 +112,6 @@ if user_role == "Master User":
         if removable_users:
             user_to_delete = st.selectbox("Select Profile to Remove", removable_users, key="del_user_select")
             if st.button("Revoke Account Access", type="primary"):
-                # Delete target user from remote server
                 supabase.table("cloud_users").delete().eq("username", user_to_delete).execute()
                 st.sidebar.warning(f"User account '{user_to_delete}' has been purged.")
                 st.rerun()
@@ -162,7 +167,6 @@ if user_role in ["Master User", "Local Head"]:
             elif assigned_head == "No Local Heads Available" or assigned_worker == "No Junior Staff Available":
                 st.error("Deployment Refused: Valid firm operators must be selected.")
             else:
-                # Let Postgres auto-increment the ID key column safely via server inserts
                 supabase.table("cloud_tasks").insert({
                     "task_name": new_task_name,
                     "local_head_assigned": assigned_head,
@@ -210,7 +214,4 @@ if user_role in ["Master User", "Local Head"]:
     # Metrics rendering block
     c1, c2 = st.columns(2)
     c1.metric("Filtered Active Deployments", len(visible_df) if not visible_df.empty else 0)
-    c2.metric("System Managed Operational Identities", len(current_db_users))
-    
-    st.subheader("📋 Comprehensive Assignment Log Matrix")
-    
+                    
