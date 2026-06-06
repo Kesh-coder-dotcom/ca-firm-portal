@@ -9,17 +9,10 @@ st.set_page_config(page_title="TASK ASSIGNER", layout="wide", initial_sidebar_st
 # --- DATABASE CONNECTION ENGINE ---
 @st.cache_resource
 def init_supabase() -> Client:
-    """Establishes a cached network client pointing directly to the database API gateway."""
-    base_url = st.secrets["supabase"]["url"].strip().rstrip("/")
-    
-    # Force the explicit REST directory sub-route to completely bypass 404 HTML landing pages
-    if not base_url.endswith("/rest/v1"):
-        api_url = f"{base_url}/rest/v1"
-    else:
-        api_url = base_url
-        
+    """Establishes a single cached client using standard clean secrets strings."""
+    url = st.secrets["supabase"]["url"].strip().rstrip("/")
     key = st.secrets["supabase"]["key"].strip()
-    return create_client(api_url, key)
+    return create_client(url, key)
 
 try:
     supabase = init_supabase()
@@ -214,4 +207,8 @@ if user_role in ["Master User", "Local Head"]:
     # Metrics rendering block
     c1, c2 = st.columns(2)
     c1.metric("Filtered Active Deployments", len(visible_df) if not visible_df.empty else 0)
-                    
+    c2.metric("System Managed Operational Identities", len(current_db_users))
+    
+    st.subheader("📋 Comprehensive Assignment Log Matrix")
+    if not visible_df.empty:
+        
