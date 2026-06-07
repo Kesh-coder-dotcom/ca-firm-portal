@@ -50,10 +50,14 @@ if st.session_state.auth_user is None:
     st.title("🔒 Professional CA Firm Portal")
     st.subheader("Secure Firm Authentication Gateway")
     
-    username_input = st.text_input("User ID Key", placeholder="Enter assigned user id...").strip()
-    password_input = st.text_input("Password Security Key", type="password", placeholder="Enter password...").strip()
+    username_raw = st.text_input("User ID Key", placeholder="Enter assigned user id...")
+    password_raw = st.text_input("Password Security Key", type="password", placeholder="Enter password...")
     
     if st.button("Authenticate Connection", use_container_width=True):
+        # Strict sanitation strip normalization to clear mobile keyboard trailing spaces
+        username_input = username_raw.strip() if username_raw else ""
+        password_input = password_raw.strip() if password_raw else ""
+        
         if username_input in current_db_users and current_db_users[username_input]["password"] == password_input:
             st.session_state.auth_user = username_input
             st.session_state.auth_role = current_db_users[username_input]["role"]
@@ -135,7 +139,6 @@ def compute_deadline_metrics(due_date):
         if isinstance(due_date, (datetime.datetime, datetime.date)):
             target_date = due_date if isinstance(due_date, datetime.date) else due_date.date()
         else:
-            # Handles pandas strings or odd object wrappers cleanly
             target_date = pd.to_datetime(due_date).date()
             
         delta = (target_date - today).days
@@ -194,7 +197,6 @@ if user_role in ["Master User", "Local Head"]:
     st.subheader("🔍 Operational Filter Console")
     f_col1, f_col2 = st.columns(2)
     
-    # Safe checks for columns in empty frames
     if not df_tasks.empty and "local_head_assigned" in df_tasks.columns:
         base_df = df_tasks if user_role == "Master User" else df_tasks[df_tasks["local_head_assigned"] == current_user]
     else:
@@ -210,7 +212,3 @@ if user_role in ["Master User", "Local Head"]:
     with f_col2:
         filter_worker = st.selectbox("Filter by Assigned Worker Account", ["All Personnel"] + all_junior_staff, key="f_staff_select")
 
-    # Process metrics and display logs dynamically
-    visible_df = base_df.copy()
-
-                      
