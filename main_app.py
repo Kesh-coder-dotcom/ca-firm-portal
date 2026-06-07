@@ -58,8 +58,8 @@ if st.session_state.auth_user is None:
     username_raw = st.text_input("User ID Key", placeholder="Enter assigned user id...")
     password_raw = st.text_input("Password Security Key", type="password", placeholder="Enter password...")
     
-    # ⚠️ LIVE DEBUGGING CONSOLE: This lets you see EXACTLY what keys your database contains!
-    with st.expander("🛠️ Connection Diagnostics Debugger (Remove in Production)", expanded=True):
+    # Live diagnostic component to view exactly what names exist inside your table row
+    with st.expander("🛠️ Connection Diagnostics Debugger", expanded=True):
         st.write("Live Synced DB User Keys Found:", list(current_db_users.keys()))
         if username_raw:
             st.write("Normalized Input Attempt Key:", username_raw.strip().lower())
@@ -209,4 +209,4 @@ if user_role in ["Master User", "Local Head"]:
     f_col1, f_col2 = st.columns(2)
     
     if not df_tasks.empty and "local_head_assigned" in df_tasks.columns:
-    
+            
