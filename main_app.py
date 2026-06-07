@@ -22,11 +22,16 @@ except Exception as e:
 
 # --- DATABASE UTILITY WRAPPERS ---
 def fetch_all_users() -> dict:
-    """Retrieves all operational credentials from the cloud."""
+    """Retrieves all operational credentials from the cloud and normalizes key case styles."""
     response = supabase.table("cloud_users").select("*").execute()
     user_dict = {}
     for user in response.data:
-        user_dict[user["username"]] = {"password": user["password"], "role": user["role"]}
+        # Force lower-case keys to eliminate case matching bugs entirely
+        u_key = str(user.get("username", "")).strip().lower()
+        user_dict[u_key] = {
+            "password": str(user.get("password", "")).strip(),
+            "role": user.get("role", "Junior Staff")
+        }
     return user_dict
 
 def fetch_all_tasks() -> list:
@@ -53,17 +58,26 @@ if st.session_state.auth_user is None:
     username_raw = st.text_input("User ID Key", placeholder="Enter assigned user id...")
     password_raw = st.text_input("Password Security Key", type="password", placeholder="Enter password...")
     
+    # ⚠️ LIVE DEBUGGING CONSOLE: This lets you see EXACTLY what keys your database contains!
+    with st.expander("🛠️ Connection Diagnostics Debugger (Remove in Production)", expanded=True):
+        st.write("Live Synced DB User Keys Found:", list(current_db_users.keys()))
+        if username_raw:
+            st.write("Normalized Input Attempt Key:", username_raw.strip().lower())
+
     if st.button("Authenticate Connection", use_container_width=True):
-        # Strict sanitation strip normalization to clear mobile keyboard trailing spaces
-        username_input = username_raw.strip() if username_raw else ""
+        username_input = username_raw.strip().lower() if username_raw else ""
         password_input = password_raw.strip() if password_raw else ""
         
-        if username_input in current_db_users and current_db_users[username_input]["password"] == password_input:
-            st.session_state.auth_user = username_input
-            st.session_state.auth_role = current_db_users[username_input]["role"]
-            st.rerun()
+        if username_input in current_db_users:
+            stored_password = current_db_users[username_input]["password"]
+            if stored_password == password_input:
+                st.session_state.auth_user = username_input
+                st.session_state.auth_role = current_db_users[username_input]["role"]
+                st.rerun()
+            else:
+                st.error("🔒 Security Exception: Access Denied. Password does not match recorded values.")
         else: 
-            st.error("🔒 Security Exception: Access Denied. Invalid User ID or Password.")
+            st.error(f"🔒 Security Exception: Access Denied. User ID '{username_input}' not found in synced directory registry.")
     st.stop()
 
 current_user = st.session_state.auth_user
@@ -90,13 +104,14 @@ if user_role == "Master User":
         
         if st.button("Deploy User Credentials"):
             if new_uid and new_pwd:
-                if new_uid not in current_db_users:
+                normalized_new_uid = new_uid.lower()
+                if normalized_new_uid not in current_db_users:
                     supabase.table("cloud_users").insert({
-                        "username": new_uid, 
+                        "username": normalized_new_uid, 
                         "password": new_pwd, 
                         "role": role_selection
                     }).execute()
-                    st.sidebar.success(f"System clearance issued to '{new_uid}'!")
+                    st.sidebar.success(f"System clearance issued to '{normalized_new_uid}'!")
                     st.rerun()
                 else:
                     st.sidebar.error("System Error: ID exists.")
@@ -123,7 +138,6 @@ all_junior_staff = [u for u, d in current_db_users.items() if d["role"] == "Juni
 # --- INTERNAL CONTROL 2: VISIBILITY & DATA ISOLATION ENGINE ---
 st.title("📊 Chartered Accountant Operational Oversight Panel")
 
-# Robust DataFrame instantiation fallback if Supabase returns nothing
 if current_db_tasks:
     df_tasks = pd.DataFrame(current_db_tasks)
 else:
@@ -131,7 +145,6 @@ else:
 
 today = datetime.date.today()
 
-# Completely safe casting conversion function to normalize database strings / pandas Timestamps
 def compute_deadline_metrics(due_date):
     if pd.isna(due_date):
         return "📁 No Deadline Specified"
@@ -156,7 +169,6 @@ else:
 # High-Tier Visibility & Interactive Multi-User Filters
 if user_role in ["Master User", "Local Head"]:
     
-    # --- TASK PROVISIONING ENGINE (CREATION FORM) ---
     st.subheader("➕ Deploy New Task Assignment")
     with st.expander("Configure New Task Deployment Parameters", expanded=False):
         t_col1, t_col2 = st.columns(2)
@@ -193,22 +205,8 @@ if user_role in ["Master User", "Local Head"]:
                 st.success("Success! New task successfully deployed into cloud workflow chain.")
                 st.rerun()
 
-    # --- ADVANCED VIEW FILTERS CORE ---
     st.subheader("🔍 Operational Filter Console")
     f_col1, f_col2 = st.columns(2)
     
     if not df_tasks.empty and "local_head_assigned" in df_tasks.columns:
-        base_df = df_tasks if user_role == "Master User" else df_tasks[df_tasks["local_head_assigned"] == current_user]
-    else:
-        base_df = df_tasks.copy()
     
-    with f_col1:
-        if user_role == "Master User":
-            filter_head = st.selectbox("Filter by Local Head Overseer", ["All Personnel"] + all_local_heads, key="f_head_select")
-        else:
-            filter_head = current_user
-            st.info(f"Filtering tracking scoped to your profile: **{current_user}**")
-            
-    with f_col2:
-        filter_worker = st.selectbox("Filter by Assigned Worker Account", ["All Personnel"] + all_junior_staff, key="f_staff_select")
-
