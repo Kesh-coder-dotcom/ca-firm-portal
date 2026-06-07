@@ -168,7 +168,6 @@ else:
 
 # High-Tier Visibility & Interactive Multi-User Filters
 if user_role in ["Master User", "Local Head"]:
-    
     st.subheader("➕ Deploy New Task Assignment")
     with st.expander("Configure New Task Deployment Parameters", expanded=False):
         t_col1, t_col2 = st.columns(2)
@@ -209,4 +208,4 @@ if user_role in ["Master User", "Local Head"]:
     f_col1, f_col2 = st.columns(2)
     
     if not df_tasks.empty and "local_head_assigned" in df_tasks.columns:
-    
+                
