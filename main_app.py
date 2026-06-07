@@ -209,4 +209,3 @@ if user_role in ["Master User", "Local Head"]:
     f_col1, f_col2 = st.columns(2)
     
     if not df_tasks.empty and "local_head_assigned" in df_tasks.columns:
-            
