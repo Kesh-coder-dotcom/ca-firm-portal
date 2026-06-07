@@ -47,7 +47,7 @@ if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
 if st.session_state.auth_user is None:
-    st.title("🔒 Professional  Portal")
+    st.title("🔒 Professional Portal")
     st.subheader("Secure Firm Authentication Gateway")
     
     username_input = st.text_input("User ID Key", placeholder="Enter assigned user id...").strip()
@@ -169,33 +169,27 @@ if user_role in ["Master User", "Local Head"]:
                     "status": "In Progress",
                     "description": new_task_desc if new_task_desc else "No custom guidelines attached."
                 }).execute()
-                
                 st.success("Success! New task successfully deployed into cloud workflow chain.")
                 st.rerun()
-
-    st.markdown("---")
-
-    # Base isolation filtering rules
-    if user_role == "Master User":
-        base_df = df_tasks
-    else:
-        base_df = df_tasks[df_tasks["local_head_assigned"] == current_user] if not df_tasks.empty else df_tasks
 
     # --- ADVANCED VIEW FILTERS CORE ---
     st.subheader("🔍 Operational Filter Console")
     f_col1, f_col2 = st.columns(2)
     
+    # Isolate initial view dataframe rows based on system clearance
+    base_df = df_tasks if user_role == "Master User" else (df_tasks[df_tasks["local_head_assigned"] == current_user] if not df_tasks.empty else df_tasks)
+    
     with f_col1:
         if user_role == "Master User":
-            filter_head = st.selectbox("Filter by Local Head Overseer", ["All Personnel"] + all_registered_identities, key="filt_head")
+            filter_head = st.selectbox("Filter by Local Head Overseer", ["All Personnel"] + all_local_heads, key="f_head_select")
         else:
             filter_head = current_user
             st.info(f"Filtering tracking scoped to your profile: **{current_user}**")
             
     with f_col2:
-        filter_worker = st.selectbox("Filter by Assigned Worker Account", ["All Personnel"] + all_registered_identities, key="filt_worker")
+        filter_worker = st.selectbox("Filter by Assigned Worker Account", ["All Personnel"] + all_junior_staff, key="f_staff_select")
 
-    # Process filters dynamically on the view DataFrame
+    # Process metrics and display logs dynamically
     visible_df = base_df.copy() if not base_df.empty else pd.DataFrame()
     
     if not visible_df.empty:
@@ -211,4 +205,5 @@ if user_role in ["Master User", "Local Head"]:
     
     st.subheader("📋 Comprehensive Assignment Log Matrix")
     if not visible_df.empty:
-                                              
+        # Columns mapped safely against database layouts
+    
