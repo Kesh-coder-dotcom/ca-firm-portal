@@ -47,7 +47,7 @@ if "auth_user" not in st.session_state:
     st.session_state.auth_user = None
 
 if st.session_state.auth_user is None:
-    st.title("🔒 Professional Portal")
+    st.title("🔒 Professional CA Firm Portal")
     st.subheader("Secure Firm Authentication Gateway")
     
     username_input = st.text_input("User ID Key", placeholder="Enter assigned user id...").strip()
@@ -118,19 +118,37 @@ all_junior_staff = [u for u, d in current_db_users.items() if d["role"] == "Juni
 
 # --- INTERNAL CONTROL 2: VISIBILITY & DATA ISOLATION ENGINE ---
 st.title("📊 Chartered Accountant Operational Oversight Panel")
-df_tasks = pd.DataFrame(current_db_tasks)
+
+# Robust DataFrame instantiation fallback if Supabase returns nothing
+if current_db_tasks:
+    df_tasks = pd.DataFrame(current_db_tasks)
+else:
+    df_tasks = pd.DataFrame(columns=["id", "task_name", "local_head_assigned", "allocated_to", "allocation_date", "due_date", "status", "description"])
+
 today = datetime.date.today()
 
+# Completely safe casting conversion function to normalize database strings / pandas Timestamps
 def compute_deadline_metrics(due_date):
-    if isinstance(due_date, str):
-        due_date = datetime.datetime.strptime(due_date, "%Y-%m-%d").date()
-    delta = (due_date - today).days
-    if delta < 0: return f"🔴 Overdue by {abs(delta)} Days"
-    elif delta <= 2: return f"⚠️ Critical Risk ({delta} Days Remaining)"
-    else: return f"🟢 Stabilized ({delta} Days)"
+    if pd.isna(due_date):
+        return "📁 No Deadline Specified"
+    try:
+        if isinstance(due_date, (datetime.datetime, datetime.date)):
+            target_date = due_date if isinstance(due_date, datetime.date) else due_date.date()
+        else:
+            # Handles pandas strings or odd object wrappers cleanly
+            target_date = pd.to_datetime(due_date).date()
+            
+        delta = (target_date - today).days
+        if delta < 0: return f"🔴 Overdue by {abs(delta)} Days"
+        elif delta <= 2: return f"⚠️ Critical Risk ({delta} Days Remaining)"
+        else: return f"🟢 Stabilized ({delta} Days)"
+    except Exception:
+        return "📁 Date Formatting Error"
 
 if not df_tasks.empty:
     df_tasks["Deadline Status Tracker"] = df_tasks["due_date"].apply(compute_deadline_metrics)
+else:
+    df_tasks["Deadline Status Tracker"] = None
 
 # High-Tier Visibility & Interactive Multi-User Filters
 if user_role in ["Master User", "Local Head"]:
@@ -176,8 +194,11 @@ if user_role in ["Master User", "Local Head"]:
     st.subheader("🔍 Operational Filter Console")
     f_col1, f_col2 = st.columns(2)
     
-    # Isolate initial view dataframe rows based on system clearance
-    base_df = df_tasks if user_role == "Master User" else (df_tasks[df_tasks["local_head_assigned"] == current_user] if not df_tasks.empty else df_tasks)
+    # Safe checks for columns in empty frames
+    if not df_tasks.empty and "local_head_assigned" in df_tasks.columns:
+        base_df = df_tasks if user_role == "Master User" else df_tasks[df_tasks["local_head_assigned"] == current_user]
+    else:
+        base_df = df_tasks.copy()
     
     with f_col1:
         if user_role == "Master User":
@@ -190,20 +211,6 @@ if user_role in ["Master User", "Local Head"]:
         filter_worker = st.selectbox("Filter by Assigned Worker Account", ["All Personnel"] + all_junior_staff, key="f_staff_select")
 
     # Process metrics and display logs dynamically
-    visible_df = base_df.copy() if not base_df.empty else pd.DataFrame()
-    
-    if not visible_df.empty:
-        if user_role == "Master User" and filter_head != "All Personnel":
-            visible_df = visible_df[visible_df["local_head_assigned"] == filter_head]
-        if filter_worker != "All Personnel":
-            visible_df = visible_df[visible_df["allocated_to"] == filter_worker]
+    visible_df = base_df.copy()
 
-    # Metrics rendering block
-    c1, c2 = st.columns(2)
-    c1.metric("Filtered Active Deployments", len(visible_df) if not visible_df.empty else 0)
-    c2.metric("System Managed Operational Identities", len(current_db_users))
-    
-    st.subheader("📋 Comprehensive Assignment Log Matrix")
-    if not visible_df.empty:
-        # Columns mapped safely against database layouts
-    
+                      
