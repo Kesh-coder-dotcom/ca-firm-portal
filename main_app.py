@@ -1,6 +1,5 @@
 """
-CA FIRM TASK DASHBOARD
-Single file - paste entirely into main_app.py
+CA FIRM TASK DASHBOARD - Single file main_app.py
 """
 
 from __future__ import annotations
@@ -9,15 +8,13 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import date
-from supabase import create_client, Client
+from supabase import create_client
 
-# SUPABASE CLIENT
-
-_supabase_client = None
+_sb = None
 
 def get_client():
-    global _supabase_client
-    if _supabase_client is None:
+    global _sb
+    if _sb is None:
         try:
             url = st.secrets["SUPABASE_URL"]
             key = st.secrets["SUPABASE_KEY"]
@@ -27,10 +24,9 @@ def get_client():
         if not url or not key:
             st.error("SUPABASE_URL and SUPABASE_KEY are not set.")
             st.stop()
-        _supabase_client = create_client(url, key)
-    return _supabase_client
+        _sb = create_client(url, key)
+    return _sb
 
-# AUTH
 
 def login(email, password):
     sb = get_client()
@@ -65,8 +61,8 @@ def login(email, password):
 
 def logout():
     get_client().auth.sign_out()
-    for key in ["auth_user", "profile", "token"]:
-        st.session_state.pop(key, None)
+    for k in ["auth_user", "profile", "token"]:
+        st.session_state.pop(k, None)
     st.rerun()
 
 
@@ -84,7 +80,6 @@ def has_role(*roles):
     u = current_user()
     return bool(u and u.get("role") in roles)
 
-# DATABASE
 
 def get_all_users():
     return (
@@ -140,8 +135,8 @@ def deactivate_user(uid):
 
 def get_tasks(filters=None):
     cols = (
-        "id, title, description, status, priority, category,"
-        "due_date, created_at, updated_at,"
+        "id, title, description, status, priority,"
+        "category, due_date, created_at, updated_at,"
         "assigned_hod, assigned_staff, created_by"
     )
     q = (
@@ -249,15 +244,8 @@ def _audit(action, target_type, target_id, details):
     except Exception:
         pass
 
-# CONSTANTS
 
-STATUSES = [
-    "pending",
-    "in_progress",
-    "review",
-    "completed",
-    "on_hold",
-]
+STATUSES = ["pending", "in_progress", "review", "completed", "on_hold"]
 PRIORITIES = ["low", "medium", "high", "urgent"]
 CATEGORIES = [
     "Audit", "Tax", "GST", "MCA",
@@ -277,7 +265,6 @@ PRIORITY_COLORS = {
     "urgent": "#f87171",
 }
 
-# UI COMPONENTS
 
 def render_filters(show_hod=True, show_staff=True):
     hods = get_users_by_role("hod")
@@ -289,15 +276,11 @@ def render_filters(show_hod=True, show_staff=True):
         if s != "All":
             filters["status"] = s
     with cols[1]:
-        p = st.selectbox(
-            "Priority", ["All"] + PRIORITIES, key="f_priority"
-        )
+        p = st.selectbox("Priority", ["All"] + PRIORITIES, key="f_priority")
         if p != "All":
             filters["priority"] = p
     with cols[2]:
-        c = st.selectbox(
-            "Category", ["All"] + CATEGORIES, key="f_cat"
-        )
+        c = st.selectbox("Category", ["All"] + CATEGORIES, key="f_cat")
         if c != "All":
             filters["category"] = c
     if show_hod:
@@ -305,9 +288,7 @@ def render_filters(show_hod=True, show_staff=True):
             hod_opts = {"All": None}
             for h in hods:
                 hod_opts[h["full_name"]] = h["id"]
-            hod_sel = st.selectbox(
-                "HOD", list(hod_opts.keys()), key="f_hod"
-            )
+            hod_sel = st.selectbox("HOD", list(hod_opts.keys()), key="f_hod")
             if hod_opts[hod_sel]:
                 filters["assigned_hod"] = hod_opts[hod_sel]
     if show_staff:
@@ -315,9 +296,7 @@ def render_filters(show_hod=True, show_staff=True):
             st_opts = {"All": None}
             for s in staff:
                 st_opts[s["full_name"]] = s["id"]
-            st_sel = st.selectbox(
-                "Staff", list(st_opts.keys()), key="f_staff"
-            )
+            st_sel = st.selectbox("Staff", list(st_opts.keys()), key="f_staff")
             if st_opts[st_sel]:
                 filters["assigned_staff"] = st_opts[st_sel]
     with cols[5]:
@@ -335,19 +314,18 @@ def render_task_card(task):
     sc = STATUS_COLORS.get(task["status"], "#888")
     pc = PRIORITY_COLORS.get(task["priority"], "#888")
     with st.expander(task["title"], expanded=False):
-        status_label = task["status"].replace("_", " ").title()
-        priority_label = task["priority"].upper()
-        badge_html = (
-            "<span style='background:" + sc + ";"
-            "color:#fff;padding:2px 10px;"
-            "border-radius:99px;font-size:0.75rem;"
-            "margin-right:6px'>" + status_label + "</span>"
-            "<span style='background:" + pc + ";"
-            "color:#000;padding:2px 10px;"
-            "border-radius:99px;font-size:0.75rem'>"
-            + priority_label + "</span>"
+        slabel = task["status"].replace("_", " ").title()
+        plabel = task["priority"].upper()
+        html = (
+            "<span style='background:" + sc + ";color:#fff;"
+            "padding:2px 10px;border-radius:99px;"
+            "font-size:0.75rem;margin-right:6px'>"
+            + slabel + "</span>"
+            "<span style='background:" + pc + ";color:#000;"
+            "padding:2px 10px;border-radius:99px;"
+            "font-size:0.75rem'>" + plabel + "</span>"
         )
-        st.markdown(badge_html, unsafe_allow_html=True)
+        st.markdown(html, unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         c1.metric("HOD", task.get("hod_name", "-"))
         c2.metric("Staff", task.get("staff_name", "-"))
@@ -368,82 +346,67 @@ def render_task_card(task):
 def render_inline_edit(task):
     role = current_user().get("role", "")
     uid = current_user().get("id", "")
-    can_edit_core = (role == "master")
-    can_edit_staff = (
+    can_core = (role == "master")
+    can_staff = (
         role == "master"
         or (role == "hod" and task.get("assigned_hod") == uid)
     )
-    can_edit_status = (
-        can_edit_staff
+    can_status = (
+        can_staff
         or (role == "staff" and task.get("assigned_staff") == uid)
     )
-    if not (can_edit_core or can_edit_staff or can_edit_status):
+    if not (can_core or can_staff or can_status):
         return
-
     with st.form(key="edit_" + task["id"]):
         st.markdown("##### Edit Task")
         cols = st.columns(3)
-        cur_status_idx = (
+        cur_si = (
             STATUSES.index(task["status"])
             if task["status"] in STATUSES else 0
         )
         new_status = cols[0].selectbox(
-            "Status",
-            STATUSES,
-            index=cur_status_idx,
-            disabled=not can_edit_status,
+            "Status", STATUSES, index=cur_si, disabled=not can_status
         )
-        staff_list = get_users_by_role("staff")
-        staff_names = [s["full_name"] for s in staff_list]
-        staff_ids = [s["id"] for s in staff_list]
+        sl = get_users_by_role("staff")
+        snames = [x["full_name"] for x in sl]
+        sids = [x["id"] for x in sl]
         cur_s = 0
-        if task.get("assigned_staff") in staff_ids:
-            cur_s = staff_ids.index(task["assigned_staff"])
-        new_staff_name = cols[1].selectbox(
-            "Staff",
-            staff_names if staff_names else ["-"],
-            index=cur_s,
-            disabled=not can_edit_staff,
+        if task.get("assigned_staff") in sids:
+            cur_s = sids.index(task["assigned_staff"])
+        opts_s = snames if snames else ["-"]
+        new_sname = cols[1].selectbox(
+            "Staff", opts_s, index=cur_s, disabled=not can_staff
         )
-        new_staff_id = None
-        if staff_names and new_staff_name in staff_names:
-            new_staff_id = staff_ids[staff_names.index(new_staff_name)]
-
-        if can_edit_core:
-            hod_list = get_users_by_role("hod")
-            hod_names = [h["full_name"] for h in hod_list]
-            hod_ids = [h["id"] for h in hod_list]
+        new_sid = None
+        if snames and new_sname in snames:
+            new_sid = sids[snames.index(new_sname)]
+        if can_core:
+            hl = get_users_by_role("hod")
+            hnames = [x["full_name"] for x in hl]
+            hids = [x["id"] for x in hl]
             cur_h = 0
-            if task.get("assigned_hod") in hod_ids:
-                cur_h = hod_ids.index(task["assigned_hod"])
-            new_hod_name = cols[2].selectbox(
-                "HOD",
-                hod_names if hod_names else ["-"],
-                index=cur_h,
-            )
-            new_hod_id = None
-            if hod_names and new_hod_name in hod_names:
-                new_hod_id = hod_ids[hod_names.index(new_hod_name)]
+            if task.get("assigned_hod") in hids:
+                cur_h = hids.index(task["assigned_hod"])
+            opts_h = hnames if hnames else ["-"]
+            new_hname = cols[2].selectbox("HOD", opts_h, index=cur_h)
+            new_hid = None
+            if hnames and new_hname in hnames:
+                new_hid = hids[hnames.index(new_hname)]
         else:
-            new_hod_id = task.get("assigned_hod")
-
-        if can_edit_core:
+            new_hid = task.get("assigned_hod")
+        if can_core:
             new_title = st.text_input("Title", value=task["title"])
-            col_p, col_c = st.columns(2)
-            pri_idx = (
+            cp, cc = st.columns(2)
+            pri_i = (
                 PRIORITIES.index(task["priority"])
                 if task["priority"] in PRIORITIES else 1
             )
-            new_priority = col_p.selectbox(
-                "Priority", PRIORITIES, index=pri_idx
-            )
-            cat_idx = (
+            new_priority = cp.selectbox("Priority", PRIORITIES, index=pri_i)
+            cat_i = (
                 CATEGORIES.index(task["category"])
                 if task.get("category") in CATEGORIES else 0
             )
-            new_category = col_c.selectbox(
-                "Category", CATEGORIES, index=cat_idx
-            )
+            new_category = cc.selectbox("Category", CATEGORIES, index=cat_i)
             due_val = None
             if task.get("due_date"):
                 try:
@@ -460,13 +423,12 @@ def render_inline_edit(task):
             new_category = task.get("category")
             new_due = task.get("due_date")
             new_desc = task.get("description")
-
         if st.form_submit_button("Save Changes", use_container_width=True):
             update_task(
                 task["id"],
                 status=new_status,
-                assigned_hod=new_hod_id,
-                assigned_staff=new_staff_id,
+                assigned_hod=new_hid,
+                assigned_staff=new_sid,
                 title=new_title,
                 priority=new_priority,
                 category=new_category,
@@ -475,8 +437,7 @@ def render_inline_edit(task):
             )
             st.success("Task updated!")
             st.rerun()
-
-    if can_edit_core:
+    if can_core:
         if st.button("Delete Task", key="del_" + task["id"]):
             delete_task(task["id"])
             st.warning("Task deleted.")
@@ -516,7 +477,6 @@ def render_comments(task_id):
                 add_comment(task_id, msg.strip())
                 st.rerun()
 
-# PAGES
 
 def page_dashboard():
     require_login()
@@ -536,18 +496,10 @@ def page_dashboard():
     tasks = get_tasks({**base, **extra})
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Total", len(tasks))
-    k2.metric("Pending", sum(
-        1 for t in tasks if t["status"] == "pending"
-    ))
-    k3.metric("In Progress", sum(
-        1 for t in tasks if t["status"] == "in_progress"
-    ))
-    k4.metric("Completed", sum(
-        1 for t in tasks if t["status"] == "completed"
-    ))
-    k5.metric("Urgent", sum(
-        1 for t in tasks if t["priority"] == "urgent"
-    ))
+    k2.metric("Pending", sum(1 for t in tasks if t["status"] == "pending"))
+    k3.metric("In Progress", sum(1 for t in tasks if t["status"] == "in_progress"))
+    k4.metric("Completed", sum(1 for t in tasks if t["status"] == "completed"))
+    k5.metric("Urgent", sum(1 for t in tasks if t["priority"] == "urgent"))
     st.divider()
     if not tasks:
         st.info("No tasks match the selected filters.")
@@ -557,36 +509,28 @@ def page_dashboard():
     with col1:
         s_df = df.groupby("status").size().reset_index(name="count")
         fig = px.pie(
-            s_df,
-            values="count",
-            names="status",
+            s_df, values="count", names="status",
             title="Tasks by Status",
             color="status",
             color_discrete_map=STATUS_COLORS,
             hole=0.5,
         )
         fig.update_layout(
-            paper_bgcolor="#0f172a",
-            plot_bgcolor="#0f172a",
-            font_color="#e2e8f0",
-            legend_font_color="#e2e8f0",
+            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+            font_color="#e2e8f0", legend_font_color="#e2e8f0",
         )
         st.plotly_chart(fig, use_container_width=True)
     with col2:
         c_df = df.groupby("category").size().reset_index(name="count")
         fig2 = px.bar(
-            c_df,
-            x="category",
-            y="count",
+            c_df, x="category", y="count",
             title="Tasks by Category",
             color="count",
             color_continuous_scale="Blues",
         )
         fig2.update_layout(
-            paper_bgcolor="#0f172a",
-            plot_bgcolor="#0f172a",
-            font_color="#e2e8f0",
-            showlegend=False,
+            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+            font_color="#e2e8f0", showlegend=False,
         )
         st.plotly_chart(fig2, use_container_width=True)
     st.markdown("### Task List")
@@ -605,10 +549,7 @@ def page_my_tasks():
     elif role == "staff":
         base["assigned_staff"] = user["id"]
     with st.expander("Filters", expanded=False):
-        extra = render_filters(
-            show_hod=False,
-            show_staff=(role == "master"),
-        )
+        extra = render_filters(show_hod=False, show_staff=(role == "master"))
     tasks = get_tasks({**base, **extra})
     if not tasks:
         st.info("No tasks found for your account.")
@@ -638,16 +579,351 @@ def page_new_task():
         c1, c2, c3 = st.columns(3)
         priority = c1.selectbox("Priority", PRIORITIES, index=1)
         category = c2.selectbox("Category", CATEGORIES)
-        due_date = c3.date_input(
-            "Due Date", value=None, min_value=date.today()
-        )
+        due_date = c3.date_input("Due Date", value=None, min_value=date.today())
         c4, c5 = st.columns(2)
         hod_names = [h["full_name"] for h in hods]
         hod_ids = [h["id"] for h in hods]
         st_names = [s["full_name"] for s in staff]
         st_ids = [s["id"] for s in staff]
-        sel_hod = c4.selectbox(
-            "Assign HOD", hod_names if hod_names else ["-"]
+        hod_opts = hod_names if hod_names else ["-"]
+        staff_opts = st_names if st_names else ["-"]
+        sel_hod = c4.selectbox("Assign HOD", hod_opts)
+        sel_staff = c5.selectbox("Assign Staff", staff_opts)
+        description = st.text_area(
+            "Task Description and Notes",
+            height=160,
+            placeholder="Client name, documents, instructions...",
         )
-        sel_staff = c5.selectbox(
-            "Assign Staff", st_names if st_names else ["-
+        if st.form_submit_button("Create Task", use_container_width=True):
+            if not title.strip():
+                st.error("Task title is required.")
+            elif not hod_ids or not st_ids:
+                st.error("Add at least one HOD and one Staff member first.")
+            else:
+                result = create_task({
+                    "title": title.strip(),
+                    "priority": priority,
+                    "category": category,
+                    "due_date": str(due_date) if due_date else None,
+                    "assigned_hod": hod_ids[hod_names.index(sel_hod)],
+                    "assigned_staff": st_ids[st_names.index(sel_staff)],
+                    "description": description.strip() or None,
+                    "status": "pending",
+                })
+                if result:
+                    st.success("Task created successfully!")
+                else:
+                    st.error("Failed. Check your Supabase connection.")
+
+
+def page_users():
+    require_login()
+    if not has_role("master"):
+        st.error("Access denied.")
+        return
+    st.markdown("## User Management")
+    BADGE = {
+        "master": ("Master", "#f59e0b"),
+        "hod": ("HOD", "#3b82f6"),
+        "staff": ("Staff", "#10b981"),
+    }
+    tab_list, tab_add = st.tabs(["All Users", "Add New User"])
+    with tab_list:
+        users = get_all_users()
+        rf = st.radio(
+            "Filter by role",
+            ["All", "master", "hod", "staff"],
+            horizontal=True,
+        )
+        filtered = users if rf == "All" else [u for u in users if u["role"] == rf]
+        if not filtered:
+            st.info("No users found.")
+        for u in filtered:
+            label, color = BADGE.get(u["role"], ("User", "#888"))
+            is_active = u.get("is_active", True)
+            active_text = "Active" if is_active else "Inactive"
+            active_color = "#10b981" if is_active else "#ef4444"
+            exp_title = u["full_name"] + "  -  " + u["email"]
+            with st.expander(exp_title):
+                role_html = (
+                    "<b>Role:</b> <span style='color:" + color + "'>"
+                    + u["role"].upper() + "</span>&nbsp;&nbsp;"
+                    "<span style='color:" + active_color + "'>● "
+                    + active_text + "</span>"
+                )
+                st.markdown(role_html, unsafe_allow_html=True)
+                c1, c2, c3 = st.columns(3)
+                new_role = c1.selectbox(
+                    "Change Role",
+                    ["master", "hod", "staff"],
+                    index=["master", "hod", "staff"].index(u["role"]),
+                    key="role_" + u["id"],
+                )
+                if c2.button("Update Role", key="upd_" + u["id"]):
+                    update_user(u["id"], role=new_role)
+                    st.success("Role updated.")
+                    st.rerun()
+                me = current_user()
+                if u["id"] != me["id"]:
+                    if is_active:
+                        if c3.button("Deactivate", key="deact_" + u["id"]):
+                            deactivate_user(u["id"])
+                            st.warning(u["full_name"] + " deactivated.")
+                            st.rerun()
+                    else:
+                        if c3.button("Reactivate", key="react_" + u["id"]):
+                            update_user(u["id"], is_active=True)
+                            st.success(u["full_name"] + " reactivated.")
+                            st.rerun()
+    with tab_add:
+        st.markdown("### Create New User")
+        st.info("Creates a Supabase Auth account and profile together.")
+        with st.form("add_user_form", clear_on_submit=True):
+            full_name = st.text_input("Full Name")
+            email = st.text_input("Email Address")
+            role = st.selectbox("Role", ["staff", "hod", "master"])
+            temp_pass = st.text_input(
+                "Temporary Password",
+                type="password",
+                help="User should change this on first login.",
+            )
+            if st.form_submit_button("Create User", use_container_width=True):
+                if not all([full_name.strip(), email.strip(), temp_pass.strip()]):
+                    st.error("All fields are required.")
+                else:
+                    try:
+                        auth_resp = get_client().auth.admin.create_user(
+                            {
+                                "email": email.strip(),
+                                "password": temp_pass.strip(),
+                                "email_confirm": True,
+                            }
+                        )
+                        create_user_profile(
+                            auth_resp.user.id,
+                            email.strip(),
+                            full_name.strip(),
+                            role,
+                        )
+                        st.success(
+                            "User " + full_name
+                            + " created as " + role.upper() + "."
+                        )
+                    except Exception as e:
+                        st.error("Error: " + str(e))
+
+
+def page_reports():
+    require_login()
+    if not has_role("master"):
+        st.error("Access denied.")
+        return
+    st.markdown("## Reports and Analytics")
+    tasks = get_tasks()
+    if not tasks:
+        st.info("No task data available yet.")
+        return
+    df = pd.DataFrame(tasks)
+    df["due_date"] = pd.to_datetime(df["due_date"], errors="coerce")
+    df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Total Tasks", len(df))
+    c2.metric("Completed", len(df[df["status"] == "completed"]))
+    overdue = df[
+        (df["due_date"] < pd.Timestamp.now())
+        & (df["status"] != "completed")
+    ]
+    c3.metric("Overdue", len(overdue))
+    hod_count = max(df["hod_name"].nunique(), 1)
+    c4.metric("Avg per HOD", round(len(df) / hod_count, 1))
+    st.divider()
+    col1, col2 = st.columns(2)
+    with col1:
+        s_df = df.groupby("status").size().reset_index(name="count")
+        fig = px.pie(
+            s_df, values="count", names="status",
+            title="Status Distribution",
+            color="status", color_discrete_map=STATUS_COLORS, hole=0.45,
+        )
+        fig.update_layout(
+            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+            font_color="#e2e8f0",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    with col2:
+        p_df = df.groupby("priority").size().reset_index(name="count")
+        fig2 = px.bar(
+            p_df, x="priority", y="count",
+            title="Priority Breakdown",
+            color="priority", color_discrete_map=PRIORITY_COLORS,
+        )
+        fig2.update_layout(
+            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+            font_color="#e2e8f0", showlegend=False,
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+    hod_df = df.groupby("hod_name").size().reset_index(name="tasks")
+    fig3 = px.bar(
+        hod_df.sort_values("tasks", ascending=False),
+        x="hod_name", y="tasks", title="Task Load per HOD",
+        color="tasks", color_continuous_scale="Blues",
+    )
+    fig3.update_layout(
+        paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+        font_color="#e2e8f0",
+    )
+    st.plotly_chart(fig3, use_container_width=True)
+    if df["created_at"].notna().any():
+        tl = (
+            df.set_index("created_at")
+            .resample("W")["id"]
+            .count()
+            .reset_index()
+            .rename(columns={"id": "tasks_created", "created_at": "week"})
+        )
+        fig4 = px.line(
+            tl, x="week", y="tasks_created",
+            title="Tasks Created Weekly",
+            line_shape="spline", markers=True,
+        )
+        fig4.update_traces(line_color="#0ea5e9")
+        fig4.update_layout(
+            paper_bgcolor="#0f172a", plot_bgcolor="#0f172a",
+            font_color="#e2e8f0",
+        )
+        st.plotly_chart(fig4, use_container_width=True)
+    st.divider()
+    st.markdown("### Full Task Data")
+    show_cols = [
+        "title", "status", "priority", "category",
+        "hod_name", "staff_name", "due_date", "created_at",
+    ]
+    st.dataframe(
+        df[[c for c in show_cols if c in df.columns]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    st.download_button(
+        "Download CSV",
+        df.to_csv(index=False).encode("utf-8"),
+        "tasks_export.csv",
+        "text/csv",
+    )
+
+
+st.set_page_config(
+    page_title="CA Firm | Task Dashboard",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+st.markdown(
+    """
+<style>
+html, body, [class*="css"] {
+    font-family: sans-serif;
+    background-color: #0f172a !important;
+    color: #e2e8f0 !important;
+}
+h1, h2, h3 { color: #f8fafc; }
+section[data-testid="stSidebar"] {
+    background: #1e293b !important;
+    border-right: 1px solid #334155;
+}
+div[data-testid="stMetric"] {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 12px 16px;
+}
+.stButton > button {
+    background: #0ea5e9;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+}
+.stButton > button:hover { background: #0284c7; }
+.streamlit-expanderHeader {
+    background: #1e293b !important;
+    border-radius: 8px !important;
+    border: 1px solid #334155 !important;
+    margin-bottom: 4px;
+}
+div[data-testid="stForm"] {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+}
+.block-container { padding-top: 1.5rem; }
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
+
+def render_login():
+    _, col, _ = st.columns([1, 2, 1])
+    with col:
+        st.markdown(
+            "<h1 style='text-align:center'>CA Task Dashboard</h1>"
+            "<p style='text-align:center;color:#94a3b8'>"
+            "Chartered Accountants - Task Management</p>",
+            unsafe_allow_html=True,
+        )
+        with st.form("login_form"):
+            email = st.text_input("Email", placeholder="you@firm.com")
+            password = st.text_input("Password", type="password")
+            if st.form_submit_button("Sign In", use_container_width=True):
+                with st.spinner("Authenticating..."):
+                    if login(email, password):
+                        st.rerun()
+
+
+def render_sidebar(user):
+    with st.sidebar:
+        name = user["full_name"]
+        role = user["role"]
+        st.markdown(
+            "<div style='padding:12px 0 8px'>"
+            "<b>" + name + "</b><br>"
+            "<span style='color:#94a3b8'>" + role + "</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        st.divider()
+        pages = {"Dashboard": "dashboard", "My Tasks": "my_tasks"}
+        if has_role("master"):
+            pages["New Task"] = "new_task"
+            pages["Manage Users"] = "users"
+            pages["Reports"] = "reports"
+        selected = st.radio(
+            "Navigation",
+            list(pages.keys()),
+            label_visibility="collapsed",
+        )
+        st.divider()
+        if st.button("Sign Out", use_container_width=True):
+            logout()
+    return pages[selected]
+
+
+def main():
+    user = current_user()
+    if not user:
+        render_login()
+        return
+    page = render_sidebar(user)
+    page_map = {
+        "dashboard": page_dashboard,
+        "my_tasks": page_my_tasks,
+        "new_task": page_new_task,
+        "users": page_users,
+        "reports": page_reports,
+    }
+    page_map[page]()
+
+
+main()
